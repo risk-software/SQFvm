@@ -37,7 +37,15 @@ namespace sqf::opcodes
             }
             else if (right_value->is<sqf::types::t_nothing>())
             {
+                // As in the engine: a command given nil evaluates to nil, unless it has a syntax that takes nil.
+                sqf::runtime::sqfop_unary::key nil_key = { m_operator_name, sqf::types::t_nothing() };
+                if (vm.sqfop_exists(nil_key))
+                {
+                    context.push_value(vm.sqfop_at(nil_key).execute(vm, *right_value));
+                    return;
+                }
                 vm.__logmsg(logmessage::runtime::NilValueFoundForRightArgumentWeak(diag_info()));
+                context.push_value({});
                 return;
             }
             

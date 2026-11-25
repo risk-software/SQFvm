@@ -38,7 +38,7 @@ namespace sqf
                 auto obj = value();
                 if (!obj)
                 {
-                    return "NULL";
+                    return "<NULL-object>";
                 }
                 if (obj->varname().empty())
                 {

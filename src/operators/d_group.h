@@ -39,7 +39,7 @@ namespace sqf
                 auto obj = value();
                 if (!obj)
                 {
-                    return "NULL";
+                    return "<NULL-group>";
                 }
                 if (obj->group_id().empty())
                 {

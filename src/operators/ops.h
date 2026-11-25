@@ -21,6 +21,7 @@
 #include "ops_loops.h"
 #include "ops_scope.h"
 #include "ops_regex.h"
+#include "ops_nil.h"
 #include "ops_system_extra.h"
 #include "ops_config_extra.h"
 #include "ops_math_extra.h"
@@ -60,6 +61,7 @@ namespace sqf
             sqf::operators::ops_loops(runtime);
             sqf::operators::ops_scope(runtime);
             sqf::operators::ops_regex(runtime);
+            sqf::operators::ops_nil(runtime);
             sqf::operators::ops_system_extra(runtime);
             sqf::operators::ops_config_extra(runtime);
             sqf::operators::ops_math_extra(runtime);

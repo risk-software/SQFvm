@@ -15,10 +15,12 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace err = logmessage::runtime;
 using namespace sqf::runtime;
@@ -235,10 +237,29 @@ namespace
             if (!m_loaded)
             {
                 m_loaded = true;
-                auto info = runtime.fileio().get_info("stringtable.xml", {});
-                if (info.has_value())
+                // The engine merges the stringtables of every addon and the mission, so every
+                // stringtable.xml below the mapped directories is read, plus one at the virtual root.
+                auto root = runtime.fileio().get_info("stringtable.xml", {});
+                if (root.has_value())
                 {
-                    parse(runtime.fileio().read_file(*info));
+                    parse(runtime.fileio().read_file(*root));
+                }
+                std::error_code error;
+                for (auto& directory : runtime.fileio().get_directories())
+                {
+                    for (auto it = std::filesystem::recursive_directory_iterator(directory, std::filesystem::directory_options::skip_permission_denied, error);
+                        !error && it != std::filesystem::recursive_directory_iterator(); it.increment(error))
+                    {
+                        if (it->is_regular_file(error) && lowercase(it->path().filename().string()) == "stringtable.xml"
+                            && (!root.has_value() || std::filesystem::path(root->physical) != it->path()))
+                        {
+                            auto contents = sqf::runtime::fileio::read_file_from_disk(it->path().string());
+                            if (contents.has_value())
+                            {
+                                parse(*contents);
+                            }
+                        }
+                    }
                 }
             }
             if (!key.empty() && key[0] == '$')

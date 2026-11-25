@@ -10,7 +10,9 @@
 #include "../runtime/d_boolean.h"
 #include "../runtime/d_array.h"
 
+#include <algorithm>
 #include <cmath>
+#include <vector>
 #include <random>
 #include <array>
 #include <iomanip>
@@ -259,6 +261,57 @@ namespace
 
 		return transposed;
 	}
+	/// Since Arma 3 2.00 these commands also take 2D vectors, with z defaulting to 0. Other sizes are
+	/// left unchanged so the usual size check reports them.
+	std::shared_ptr<d_array> as_vector3(value::cref source)
+	{
+		auto arr = source.data<d_array>();
+		if (arr->size() != 2)
+		{
+			return arr;
+		}
+		auto padded = std::make_shared<d_array>(arr->value());
+		padded->push_back(0.0f);
+		return padded;
+	}
+	/// Reads an array of any length that holds only numbers (Arma 3 2.14 vector commands).
+	bool read_number_vector(runtime& runtime, value::cref source, std::vector<float>& out)
+	{
+		auto arr = source.data<d_array>();
+		if (!arr->check_type(runtime, t_scalar(), 0, arr->size()))
+		{
+			return false;
+		}
+		out.clear();
+		for (size_t i = 0; i < arr->size(); i++)
+		{
+			out.push_back(arr->at(i).data<d_scalar, float>());
+		}
+		return true;
+	}
+	value number_vector(const std::vector<float>& numbers)
+	{
+		std::vector<value> out(numbers.begin(), numbers.end());
+		return std::make_shared<d_array>(out);
+	}
+	/// Element-wise operation; when one vector is longer, its remaining elements are kept unchanged.
+	template<typename TOperation>
+	value elementwise(runtime& runtime, value::cref left, value::cref right, TOperation operation)
+	{
+		std::vector<float> l, r;
+		if (!read_number_vector(runtime, left, l) || !read_number_vector(runtime, right, r))
+		{
+			return {};
+		}
+		std::vector<float> out;
+		for (size_t i = 0; i < std::max(l.size(), r.size()); i++)
+		{
+			if (i < l.size() && i < r.size()) { out.push_back(operation(l[i], r[i])); }
+			else if (i < l.size()) { out.push_back(l[i]); }
+			else { out.push_back(r[i]); }
+		}
+		return number_vector(out);
+	}
 	float dotProduct(vec3 left, vec3 right)
 	{
 		return left.x * right.x + left.y * right.y + left.z * right.z;
@@ -281,22 +334,12 @@ namespace
 	}
 	value vectoradd_array_array(runtime& runtime, value::cref left, value::cref right)
 	{
-		auto l = left.data<d_array>();
-		auto r = right.data<d_array>();
-		auto arr = std::make_shared<d_array>();
-		if (!l->check_type(runtime, t_scalar(), 3) || !r->check_type(runtime, t_scalar(), 3))
-		{
-			return {};
-		}
-		arr->push_back(l->at(0).data<d_scalar, float>() + r->at(0).data<d_scalar, float>());
-		arr->push_back(l->at(1).data<d_scalar, float>() + r->at(1).data<d_scalar, float>());
-		arr->push_back(l->at(2).data<d_scalar, float>() + r->at(2).data<d_scalar, float>());
-		return value(arr);
+		return elementwise(runtime, left, right, [](float a, float b) { return a + b; });
 	}
 	value vectorcos_array_array(runtime& runtime, value::cref left, value::cref right)
 	{
-		auto l = left.data<d_array>();
-		auto r = right.data<d_array>();
+		auto l = as_vector3(left);
+		auto r = as_vector3(right);
 		auto arr = std::make_shared<d_array>();
 		if (!l->check_type(runtime, t_scalar(), 3) || !r->check_type(runtime, t_scalar(), 3))
 		{
@@ -331,8 +374,8 @@ namespace
 	}
 	value vectordistancesqr_array_array(runtime& runtime, value::cref left, value::cref right)
 	{
-		auto l = left.data<d_array>();
-		auto r = right.data<d_array>();
+		auto l = as_vector3(left);
+		auto r = as_vector3(right);
 		auto arr = std::make_shared<d_array>();
 		if (!l->check_type(runtime, t_scalar(), 3) || !r->check_type(runtime, t_scalar(), 3))
 		{
@@ -342,63 +385,71 @@ namespace
 	}
 	value vectormultiply_array_scalar(runtime& runtime, value::cref left, value::cref right)
 	{
-		auto l = left.data<d_array>();
-		auto r = right.data<d_scalar, float>();
-		auto arr = std::make_shared<d_array>();
-		if (!l->check_type(runtime, t_scalar(), 3))
+		std::vector<float> l;
+		if (!read_number_vector(runtime, left, l))
 		{
 			return {};
 		}
-		arr->push_back(l->at(0).data<d_scalar, float>() * r);
-		arr->push_back(l->at(1).data<d_scalar, float>() * r);
-		arr->push_back(l->at(2).data<d_scalar, float>() * r);
-		return value(arr);
+		auto factor = right.data<d_scalar, float>();
+		for (auto& number : l)
+		{
+			number *= factor;
+		}
+		return number_vector(l);
+	}
+	/// vector vectorMultiply vector (2.14): element-wise product.
+	value vectormultiply_array_array(runtime& runtime, value::cref left, value::cref right)
+	{
+		return elementwise(runtime, left, right, [](float a, float b) { return a * b; });
 	}
 	value vectordiff_array_array(runtime& runtime, value::cref left, value::cref right)
 	{
-		auto l = left.data<d_array>();
-		auto r = right.data<d_array>();
-		auto arr = std::make_shared<d_array>();
-		if (!l->check_type(runtime, t_scalar(), 3) || !r->check_type(runtime, t_scalar(), 3))
-		{
-			return {};
-		}
-		arr->push_back(l->at(0).data<d_scalar, float>() - r->at(0).data<d_scalar, float>());
-		arr->push_back(l->at(1).data<d_scalar, float>() - r->at(1).data<d_scalar, float>());
-		arr->push_back(l->at(2).data<d_scalar, float>() - r->at(2).data<d_scalar, float>());
-		return value(arr);
+		return elementwise(runtime, left, right, [](float a, float b) { return a - b; });
 	}
 	value vectordotproduct_array_array(runtime& runtime, value::cref left, value::cref right)
 	{
-		auto l = left.data<d_array>();
-		auto r = right.data<d_array>();
-		if (!l->check_type(runtime, t_scalar(), 3) || !r->check_type(runtime, t_scalar(), 3))
+		std::vector<float> l, r;
+		if (!read_number_vector(runtime, left, l) || !read_number_vector(runtime, right, r))
 		{
 			return {};
 		}
-		return dotProduct(*l, *r);
+		if (l.size() != r.size())
+		{
+			runtime.__logmsg(err::ExpectedArraySizeMissmatch(runtime.context_active().current_frame().diag_info_from_position(), l.size(), r.size()));
+			return {};
+		}
+		float sum = 0;
+		for (size_t i = 0; i < l.size(); i++)
+		{
+			sum += l[i] * r[i];
+		}
+		return sum;
 	}
 	value vectormagnitude_array(runtime& runtime, value::cref left)
 	{
-		auto l = left.data<d_array>();
-		if (!l->check_type(runtime, t_scalar(), 3))
+		std::vector<float> l;
+		if (!read_number_vector(runtime, left, l))
 		{
 			return {};
 		}
-		return vectorMagnitude(*l);
+		float sum = 0;
+		for (auto number : l) { sum += number * number; }
+		return std::sqrt(sum);
 	}
 	value vectormagnitudesqr_array(runtime& runtime, value::cref left)
 	{
-		auto l = left.data<d_array>();
-		if (!l->check_type(runtime, t_scalar(), 3))
+		std::vector<float> l;
+		if (!read_number_vector(runtime, left, l))
 		{
 			return {};
 		}
-		return vectorMagnitudeSqr(*l);
+		float sum = 0;
+		for (auto number : l) { sum += number * number; }
+		return sum;
 	}
 	value vectornormalized_array(runtime& runtime, value::cref left)
 	{
-		auto l = left.data<d_array>();
+		auto l = as_vector3(left);
 		auto arr = std::make_shared<d_array>();
 		if (!l->check_type(runtime, t_scalar(), 3))
 		{
@@ -501,6 +552,7 @@ void sqf::operators::ops_math(sqf::runtime::runtime& runtime)
 	runtime.register_sqfop(unary("vectorMagnitude", t_array(), "Magnitude of a 3D vector.", vectormagnitude_array));
 	runtime.register_sqfop(unary("vectorMagnitudeSqr", t_array(), "Squared magnitude of a 3D vector.", vectormagnitudesqr_array));
 	runtime.register_sqfop(binary(4, "vectorMultiply", t_array(), t_scalar(), "Multiplies 3D vector by a t_scalar().", vectormultiply_array_scalar));
+	runtime.register_sqfop(binary(4, "vectorMultiply", t_array(), t_array(), "Multiplies two vectors element by element.", vectormultiply_array_array));
 	runtime.register_sqfop(unary("vectorNormalized", t_array(), "Returns normalized vector (unit vector, vectorMagnitude = 1) of given vector. If given vector is 0 result is a 0 vector as well.", vectornormalized_array));
 	runtime.register_sqfop(binary(4, "toFixed", t_scalar(), t_scalar(), "Converts a number into a string, keeping the specified number of decimals. Range from 0 to 20.", tofixed_scalar_scalar));
 	runtime.register_sqfop(unary("toFixed", t_scalar(), "Sets how many decimals should be displayed during to string conversion. -1 resets to default. Range from 0 to 20.", tofixed_scalar));

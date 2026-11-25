@@ -37,11 +37,6 @@ namespace sqf::opcodes
                 }
                 return;
             }
-            else if (right_value->is<sqf::types::t_nothing>())
-            {
-                vm.__logmsg(logmessage::runtime::NilValueFoundForRightArgumentWeak(diag_info()));
-                return;
-            }
 
 
 
@@ -58,9 +53,32 @@ namespace sqf::opcodes
                 }
                 return;
             }
-            else if (left_value->is<sqf::types::t_nothing>())
+            bool left_nil = left_value->is<sqf::types::t_nothing>();
+            bool right_nil = right_value->is<sqf::types::t_nothing>();
+            if (left_nil || right_nil)
             {
-                vm.__logmsg(logmessage::runtime::NilValueFoundForRightArgumentWeak(diag_info()));
+                // As in the engine: a command given nil evaluates to nil, unless it has a syntax that takes nil.
+                auto nil_left = left_nil ? sqf::runtime::type(sqf::types::t_nothing()) : left_value->type();
+                auto nil_right = right_nil ? sqf::runtime::type(sqf::types::t_nothing()) : right_value->type();
+                for (const sqf::runtime::sqfop_binary::key& nil_key : {
+                    sqf::runtime::sqfop_binary::key{ m_operator_name, nil_left, nil_right },
+                    sqf::runtime::sqfop_binary::key{ m_operator_name, left_nil ? nil_left : sqf::runtime::type(sqf::types::t_any()), right_nil ? nil_right : sqf::runtime::type(sqf::types::t_any()) } })
+                {
+                    if (vm.sqfop_exists(nil_key))
+                    {
+                        context.push_value(vm.sqfop_at(nil_key).execute(vm, *left_value, *right_value));
+                        return;
+                    }
+                }
+                if (right_nil)
+                {
+                    vm.__logmsg(logmessage::runtime::NilValueFoundForRightArgumentWeak(diag_info()));
+                }
+                else
+                {
+                    vm.__logmsg(logmessage::runtime::NilValueFoundForLeftArgumentWeak(diag_info()));
+                }
+                context.push_value({});
                 return;
             }
 

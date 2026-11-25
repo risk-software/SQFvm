@@ -42,32 +42,15 @@ replace_in_file(os.path.join(addons_dir, 'events', 'test.sqf'), '"globalEventJIP
 replace_in_file(os.path.join(addons_dir, 'hashes', 'test.sqf'), '"parseJSON", ', '')
 replace_in_file(os.path.join(addons_dir, 'network', 'test.sqf'), '"network"', '')
 
-# Dummy workarounds for commands not yet implemented
-replace_in_file(os.path.join(addons_dir, 'arrays', 'fnc_findNull.sqf'), 'controlNull, ', '')
-replace_in_file(os.path.join(addons_dir, 'arrays', 'fnc_findNull.sqf'), 'displayNull, ', '')
-replace_in_file(os.path.join(addons_dir, 'arrays', 'fnc_findNull.sqf'), 'locationNull, ', '')
-replace_in_file(os.path.join(addons_dir, 'arrays', 'fnc_findNull.sqf'), 'taskNull, ', '')
-replace_in_file(os.path.join(addons_dir, 'arrays', 'fnc_findNull.sqf'), 'teamMemberNull, ', '')
-replace_in_file(os.path.join(addons_dir, 'arrays', 'test_findNil.sqf'), 'displayNull', 'missionNamespace')
-replace_in_file(os.path.join(addons_dir, 'arrays', 'test_findNull.sqf'), 'displayNull', 'missionNamespace')
-replace_in_file(os.path.join(addons_dir, 'arrays', 'test_findTypeName.sqf'), 'controlNull, ', '')
-replace_in_file(os.path.join(addons_dir, 'arrays', 'test_findTypeName.sqf'), 'displayNull, ', '')
-replace_in_file(os.path.join(addons_dir, 'arrays', 'test_findTypeName.sqf'), 'locationNull, ', '')
-replace_in_file(os.path.join(addons_dir, 'arrays', 'test_findTypeName.sqf'), 'taskNull, ', '')
+# Workarounds for commands that need a game world
 replace_in_file(os.path.join(addons_dir, 'common', 'fnc_createNamespace.sqf'), 'createLocation ["CBA_NamespaceDummy", DUMMY_POSITION, 0, 0]', '"CBA_NamespaceDummy" createVehicle DUMMY_POSITION')
 replace_in_file(os.path.join(addons_dir, 'common', 'fnc_createNamespace.sqf'), 'createSimpleObject ["CBA_NamespaceDummy", DUMMY_POSITION]', '"CBA_NamespaceDummy" createVehicle DUMMY_POSITION')
-replace_in_file(os.path.join(addons_dir, 'common', 'test_macro_is_x.sqf'), 'controlNull', '""')
-replace_in_file(os.path.join(addons_dir, 'common', 'test_macro_is_x.sqf'), 'displayNull', '""')
-replace_in_file(os.path.join(addons_dir, 'common', 'test_macro_is_x.sqf'), 'locationNull', '""')
 replace_in_file(os.path.join(addons_dir, 'common', 'test_macro_is_x.sqf'), 'missionconfigfile', 'configFile')
 replace_in_file(os.path.join(addons_dir, 'diagnostic', 'fnc_error.sqf'), 'QGVAR(Error) cutRsc [QGVAR(Error), "PLAIN"];', '')
 replace_in_file(os.path.join(addons_dir, 'diagnostic', 'fnc_error.sqf'), '_control ctrlSetStructuredText composeText _compose;', '')
-replace_in_file(os.path.join(addons_dir, 'main', 'script_macros_common.hpp'), 'controlNull', '""')
-replace_in_file(os.path.join(addons_dir, 'main', 'script_macros_common.hpp'), 'displayNull', '""')
-replace_in_file(os.path.join(addons_dir, 'main', 'script_macros_common.hpp'), 'locationNull', '""')
-replace_in_file(os.path.join(addons_dir, 'strings', 'fnc_formatNumber.sqf'), 'localize', '')
-replace_in_file(os.path.join(addons_dir, 'vectors', 'fnc_vectAdd.sqf'), 'BIS_fnc_vectorAdd', '{}')
-replace_in_file(os.path.join(addons_dir, 'vectors', 'fnc_vectDot.sqf'), 'BIS_fnc_dotProduct', '{}')
+# BIS functions are not part of SQF-VM; use the engine commands these two wrap.
+replace_in_file(os.path.join(addons_dir, 'vectors', 'fnc_vectAdd.sqf'), 'BIS_fnc_vectorAdd', '{ (_this select 0) vectorAdd (_this select 1) }')
+replace_in_file(os.path.join(addons_dir, 'vectors', 'fnc_vectDot.sqf'), 'BIS_fnc_dotProduct', '{ (_this select 0) vectorDotProduct (_this select 1) }')
 
 sqfvm_binary = 'sqfvm'
 sqfvm_test_script = os.path.join(current_dir, 'cba_a3.sqf')

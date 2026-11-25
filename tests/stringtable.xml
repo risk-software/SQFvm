@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project name="SQF-VM tests">
+    <Package name="tests">
+        <Key ID="STR_sqfvm_test_hello">
+            <Original>Hello &amp; welcome</Original>
+            <German>Hallo und willkommen</German>
+        </Key>
+        <Key ID="STR_sqfvm_test_english_only">
+            <English>English text</English>
+        </Key>
+    </Package>
+</Project>
