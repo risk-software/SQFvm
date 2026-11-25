@@ -298,6 +298,8 @@ namespace sqf::runtime
                 };
                 std::shared_ptr<sqf::runtime::context> context_active_as_shared() const { return m_context_active; };
                 std::weak_ptr<context> context_create() { auto ptr = std::make_shared<context>(); m_contexts.push_back(ptr); return ptr; }
+                /// Marks a script as done with its result and starts its continueWith callbacks.
+                void complete_script(const std::shared_ptr<script_completion>& completion, sqf::runtime::value result);
                 context_iterator context_begin() { return m_contexts.begin(); }
                 context_iterator context_end() { return m_contexts.end(); }
 

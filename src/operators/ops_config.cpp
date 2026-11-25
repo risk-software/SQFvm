@@ -114,13 +114,11 @@ namespace
             runtime.__logmsg(err::ReturningEmptyArray(runtime.context_active().current_frame().diag_info_from_position()));
             return std::make_shared<d_array>();
         }
-        // Get navigation path
+        // The entry and its logical parents as config entries, from configFile down, as in the engine.
         std::vector<value> path;
-        path.push_back(nav->name);
-        while (nav->id_parent_logical != config::invalid_id)
+        for (auto entry = nav; !entry.empty(); entry = entry.parent_logical())
         {
-            path.push_back(nav->name);
-            nav = nav.parent_logical();
+            path.push_back(value(*entry));
         }
 
         std::reverse(path.begin(), path.end());
@@ -136,7 +134,13 @@ namespace
             runtime.__logmsg(err::ReturningConfigNull(runtime.context_active().current_frame().diag_info_from_position()));
             return config();
         }
-        return { *nav.parent_logical() };
+        // The class this entry inherits from, not the class that contains it.
+        auto parent = nav.parent_inherited();
+        if (parent.empty())
+        {
+            return config();
+        }
+        return { *parent };
     }
     value isnumber_config(runtime& runtime, value::cref right)
     {

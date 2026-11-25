@@ -9,6 +9,7 @@
 #include "../runtime/d_boolean.h"
 #include "../runtime/d_code.h"
 #include "../runtime/d_scalar.h"
+#include "../runtime/d_string.h"
 
 #include <chrono>
 #include <optional>
@@ -292,7 +293,7 @@ namespace
         return retry_argument;
     }
 
-    /// waitUntil scriptHandle (2.22). SQF-VM does not keep script results, so this returns nil.
+    /// waitUntil scriptHandle (2.22): returns the script's result, or the promise's result.
     value waituntil_script(runtime& runtime, value::cref right)
     {
         auto& context = runtime.context_active();
@@ -301,9 +302,10 @@ namespace
             runtime.__logmsg(err::SuspensionInUnscheduledEnvironment(context.current_frame().diag_info_from_position()));
             return {};
         }
-        if (right.data<d_script>()->done())
+        auto script = right.data<d_script>();
+        if (script->done())
         {
-            return {};
+            return script->result();
         }
         return retry_wait(runtime, right);
     }
@@ -325,7 +327,7 @@ namespace
         }
         if (arr->at(0).data<d_script>()->done())
         {
-            return {};
+            return arr->at(0).data<d_script>()->result();
         }
         // Seconds since the VM started, like the time command, so a float keeps enough precision.
         using namespace std::chrono;
@@ -350,6 +352,67 @@ namespace
         }
         return waituntil_array(runtime, right);
     }
+
+    /// spawn "name" (2.22): an empty handle that works as a promise until terminate [handle, result].
+    value spawn_string(runtime& runtime, value::cref right)
+    {
+        return value(d_script::promise(right.data<d_string, std::string>()));
+    }
+
+    /// handle terminate result (2.22): completes a promise with the result.
+    value terminate_script_any(runtime& runtime, value::cref left, value::cref right)
+    {
+        auto script = left.data<d_script>();
+        if (!script->is_promise())
+        {
+            runtime.__logmsg(err::ErrorMessage(runtime.context_active().current_frame().diag_info_from_position(), "terminate", "only empty handles from spawn \"name\" can be given a result"));
+            return {};
+        }
+        if (script->done())
+        {
+            runtime.__logmsg(err::ScriptHandleAlreadyFinished(runtime.context_active().current_frame().diag_info_from_position()));
+            return {};
+        }
+        runtime.complete_script(script->completion(), right);
+        return {};
+    }
+
+    /// handle continueWith code / [code, arguments] (2.22): runs the code unscheduled when the script or
+    /// promise completes, with the result in _this and the arguments in _thisArgs.
+    void add_continuation(runtime& runtime, value::cref handle, value code, value arguments)
+    {
+        auto script = handle.data<d_script>();
+        auto completion = script->completion();
+        if (!completion)
+        {
+            runtime.__logmsg(err::ErrorMessage(runtime.context_active().current_frame().diag_info_from_position(), "continueWith", "the script handle is null"));
+            return;
+        }
+        completion->continuations.emplace_back(code, arguments);
+        if (completion->done)
+        {
+            // Already complete: run the callback now, as the engine does for finished promises.
+            auto result = completion->result;
+            completion->done = false;
+            runtime.complete_script(completion, result);
+        }
+    }
+    value continuewith_script_code(runtime& runtime, value::cref left, value::cref right)
+    {
+        add_continuation(runtime, left, right, value{});
+        return {};
+    }
+    value continuewith_script_array(runtime& runtime, value::cref left, value::cref right)
+    {
+        auto params = right.data<d_array>();
+        if (params->size() < 1 || params->size() > 2 || !params->at(0).is<t_code>())
+        {
+            runtime.__logmsg(err::ErrorMessage(runtime.context_active().current_frame().diag_info_from_position(), "continueWith", "expected [code, arguments]"));
+            return {};
+        }
+        add_continuation(runtime, left, params->at(0), params->size() == 2 ? params->at(1) : value{});
+        return {};
+    }
 }
 
 void sqf::operators::ops_loops(::sqf::runtime::runtime& runtime)
@@ -363,5 +426,9 @@ void sqf::operators::ops_loops(::sqf::runtime::runtime& runtime)
     runtime.register_sqfop(binary(4, "forEach", t_code(), t_hashmap(), "Executes the code for every key-value pair of the HashMap. The key is in _x and the value in _y.", foreach_code_hashmap));
     runtime.register_sqfop(binary(4, "apply", t_hashmap(), t_code(), "Executes the code for every key-value pair of the HashMap (_x key, _y value) and returns an array of the results.", apply_hashmap_code));
     runtime.register_sqfop(unary("waitUntil", t_array(), "waitUntil [condition, timeout, interval] or waitUntil [scriptHandle, timeout]: waits until the condition is true, the script is done or the timeout passes.", waituntil_array_dispatch));
-    runtime.register_sqfop(unary("waitUntil", t_script(), "Waits until the script is done.", waituntil_script));
+    runtime.register_sqfop(unary("waitUntil", t_script(), "Waits until the script is done and returns its result.", waituntil_script));
+    runtime.register_sqfop(unary("spawn", t_string(), "spawn \"name\": creates an empty handle that works as a promise.", spawn_string));
+    runtime.register_sqfop(binary(4, "terminate", t_script(), t_any(), "handle terminate result: completes a promise with the result.", terminate_script_any));
+    runtime.register_sqfop(binary(4, "continueWith", t_script(), t_code(), "Runs the code unscheduled when the script or promise completes, with the result in _this.", continuewith_script_code));
+    runtime.register_sqfop(binary(4, "continueWith", t_script(), t_array(), "continueWith [code, arguments]: like continueWith code, with the arguments in _thisArgs.", continuewith_script_array));
 }

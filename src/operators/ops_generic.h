@@ -50,6 +50,8 @@ namespace sqf
             using data_type = sqf::runtime::t_script;
         private:
             std::weak_ptr<sqf::runtime::context> m_context;
+            std::shared_ptr<sqf::runtime::script_completion> m_completion;
+            std::string m_promise_name;
         protected:
             bool do_equals(std::shared_ptr<sqf::runtime::data> other, bool invariant) const override
             {
@@ -57,11 +59,31 @@ namespace sqf
             }
         public:
             d_script() = default;
-            d_script(std::weak_ptr<sqf::runtime::context> weak) : m_context(weak) {}
+            d_script(std::weak_ptr<sqf::runtime::context> weak) : m_context(weak)
+            {
+                if (auto lock = weak.lock())
+                {
+                    m_completion = lock->completion();
+                }
+            }
+            /// An "Empty Handle" (spawn name, 2.22): a promise with no script, completed by terminate [handle, result].
+            static std::shared_ptr<d_script> promise(std::string name)
+            {
+                auto script = std::make_shared<d_script>();
+                script->m_completion = std::make_shared<sqf::runtime::script_completion>();
+                script->m_promise_name = std::move(name);
+                return script;
+            }
+            bool is_promise() const { return m_context.expired() && m_completion && !m_promise_name.empty(); }
+            std::shared_ptr<sqf::runtime::script_completion> completion() const { return m_completion; }
 
             std::string to_string_sqf() const override { return to_string(); }
             std::string to_string() const override
             {
+                if (!m_promise_name.empty())
+                {
+                    return m_promise_name;
+                }
                 if (m_context.expired())
                 {
                     return "SCRIPT";
@@ -83,7 +105,16 @@ namespace sqf
             std::shared_ptr<sqf::runtime::context> value() const { return m_context.lock(); }
             void value(std::weak_ptr<sqf::runtime::context> weak) { m_context = weak; }
 
-            bool done() const { return m_context.expired(); }
+            bool done() const
+            {
+                if (m_completion)
+                {
+                    return m_completion->done;
+                }
+                return m_context.expired();
+            }
+            /// The script's last value, or the promise's result; nil while not done.
+            sqf::runtime::value result() const { return m_completion && m_completion->done ? m_completion->result : sqf::runtime::value{}; }
         };
         class d_switch : public sqf::runtime::data
         {

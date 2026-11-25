@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include "d_code.h"
 #include "diagnostics/stacktrace.h"
 #include "d_array.h"
 #include "d_string.h"
@@ -326,6 +327,22 @@ sqf::runtime::runtime::result sqf::runtime::runtime::execute(sqf::runtime::runti
                 for (size_t i = 0; i < m_contexts.size(); i++)
                 {
                     m_context_active = m_contexts[i];
+                    // terminate only sets a flag; the script stops the next time the scheduler reaches it.
+                    if (m_context_active->terminate())
+                    {
+                        if (auto completion = m_context_active->completion_if_any())
+                        {
+                            complete_script(completion, {});
+                        }
+                        m_contexts.erase(m_contexts.begin() + i);
+                        if (m_contexts.empty())
+                        {
+                            m_context_active = {};
+                            goto start_loop_exit;
+                        }
+                        i--;
+                        continue;
+                    }
                     if (m_context_active->suspended())
                     {
                         if (m_context_active->wakeup_timestamp() <= std::chrono::system_clock::now())
@@ -363,6 +380,10 @@ sqf::runtime::runtime::result sqf::runtime::runtime::execute(sqf::runtime::runti
                         if (opt_val.has_value() && configuration().print_context_work_to_log_on_exit)
                         {
                             __logmsg(logmessage::runtime::ContextValuePrint(opt_val.value()));
+                        }
+                        if (auto completion = m_context_active->completion_if_any())
+                        {
+                            complete_script(completion, opt_val.value_or(sqf::runtime::value{}));
                         }
                         m_contexts.erase(m_contexts.begin() + i);
                         if (m_contexts.empty())
@@ -643,5 +664,26 @@ sqf::runtime::runtime::result sqf::runtime::runtime::execute(sqf::runtime::runti
         m_evaluate_halt = false;
         success = false;
         return {};
+    }
+}
+
+void sqf::runtime::runtime::complete_script(const std::shared_ptr<script_completion>& completion, sqf::runtime::value result)
+{
+    if (completion->done)
+    {
+        return;
+    }
+    completion->done = true;
+    completion->result = result;
+    auto continuations = std::move(completion->continuations);
+    completion->continuations.clear();
+    // Each continueWith callback runs unscheduled in its own context, with the result in _this.
+    for (auto& [code, arguments] : continuations)
+    {
+        auto callback_context = context_create().lock();
+        sqf::runtime::frame callback_frame(default_value_scope(), code.data<sqf::types::d_code, sqf::runtime::instruction_set>());
+        callback_frame["_this"] = result;
+        callback_frame["_thisArgs"] = arguments;
+        callback_context->push_frame(callback_frame);
     }
 }

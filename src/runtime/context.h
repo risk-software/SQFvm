@@ -2,6 +2,8 @@
 #include "frame.h"
 #include "value.h"
 
+#include <memory>
+#include <utility>
 #include <vector>
 #include <chrono>
 #include <optional>
@@ -17,6 +19,17 @@
 
 namespace sqf::runtime
 {
+    /// Completion state of a scheduled script, shared by its context and its script handles, so
+    /// handles can report the result after the context is gone. Promise handles (spawn "name") have
+    /// a completion but no context.
+    struct script_completion
+    {
+        bool done = false;
+        sqf::runtime::value result;
+        // continueWith callbacks: the code and the value for _thisArgs.
+        std::vector<std::pair<sqf::runtime::value, sqf::runtime::value>> continuations;
+    };
+
     class context final
     {
     private:
@@ -28,8 +41,16 @@ namespace sqf::runtime
         std::chrono::system_clock::time_point m_wakeup_timestamp;
         std::string m_name;
         bool m_terminate;
+        std::shared_ptr<script_completion> m_completion;
 
     public:
+        /// Created on first use, when a script handle for this context is made.
+        std::shared_ptr<script_completion> completion()
+        {
+            if (!m_completion) { m_completion = std::make_shared<script_completion>(); }
+            return m_completion;
+        }
+        std::shared_ptr<script_completion> completion_if_any() const { return m_completion; }
         context() :
             m_can_suspend(false),
             m_suspended(false),

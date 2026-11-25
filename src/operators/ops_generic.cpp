@@ -1205,9 +1205,18 @@ namespace
         {
             runtime.__logmsg(err::ScriptHandleAlreadyFinished(runtime.context_active().current_frame().diag_info_from_position()));
         }
+        else if (r->is_promise())
+        {
+            // Terminating an empty handle completes the promise without a result.
+            runtime.complete_script(r->completion(), {});
+        }
         else
         {
             auto lock = r->value();
+            if (!lock)
+            {
+                return {};
+            }
 
             if (lock->terminate())
             {
