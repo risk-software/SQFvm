@@ -1,0 +1,18 @@
+[   ["assertEqual",     ["regexMatch ignores case by default", { "I'm a coOkIe clicker" regexMatch ".*cookie.*" } ], true],
+    ["assertEqual",     ["regexMatch with empty flags is case-sensitive", { "I'm a coOkIe clicker" regexMatch ".*cookie.*/" } ], false],
+    ["assertEqual",     ["regexMatch needs a full match", { "Cookie clicker" regexMatch "cookie/i" } ], false],
+    ["assertEqual",     ["regexFind with g finds every match", { "wooKie boOkie cookie" regexFind [".ookie/gio"] } ], [[["wooKie", 0]], [["boOkie", 7]], [["cookie", 14]]]],
+    ["assertEqual",     ["regexFind without g finds the first match", { "wooKie boOkie cookie" regexFind [".ookie/i"] } ], [[["wooKie", 0]]]],
+    ["assertEqual",     ["regexFind with empty flags is case-sensitive", { "wooKie boOkie cookie" regexFind [".ookie/"] } ], [[["cookie", 14]]]],
+    ["assertEqual",     ["regexFind returns groups", { "I'm a cookie clicker" regexFind ["c(.*?)k(.*?)e/i"] } ], [[["cookie", 6], ["oo", 7], ["i", 10]]]],
+    ["assertEqual",     ["regexFind default flags find every match", { "I'm a cookie clicker" regexFind ["c(.*?)k(.*?)e"] } ], [[["cookie", 6], ["oo", 7], ["i", 10]], [["clicke", 13], ["lic", 14], ["", 18]]]],
+    ["assertEqual",     ["regexFind anchors match at line breaks", { ("co1kie2" + toString [10] + "co2kie") regexFind ["^co.kie$"] } ], [[["co2kie", 8]]]],
+    ["assertEqual",     ["regexFind with a start offset", { "abcabc" regexFind ["b", 2] } ], [[["b", 4]]]],
+    ["assertEqual",     ["regexReplace with $'", { "wookie boOkie cookie" regexReplace [".oo/gio", "[$']"] } ], "[kie boOkie cookie]kie [kie cookie]kie [kie]kie"],
+    ["assertEqual",     ["regexReplace with $&", { "wookie boOkie cookie" regexReplace [".oo/gio", "[$&]"] } ], "[woo]kie [boO]kie [coo]kie"],
+    ["assertEqual",     ["regexReplace with groups", { "wook1e boOk2e cook3e" regexReplace [".(oo)(.*?)e", "[$2]"] } ], "[k1] [k2] [k3]"],
+    ["assertEqual",     ["regexReplace with a named group", { "wOokie boOkie cookie" regexReplace [".(?<test>oo)kie/gio", "[$+{test}]"] } ], "[Oo] [oO] [oo]"],
+    ["assertEqual",     ["regexReplace lower case conversion", { "ArmA 3 is so awesome!" regexReplace ["(rmA 3)", "\L$1"] } ], "Arma 3 is so awesome!"],
+    ["assertEqual",     ["regexReplace without g replaces the first match", { "aaa" regexReplace ["a/", "b"] } ], "baa"],
+    ["assertException", ["regexMatch with an invalid pattern is an error", { "a" regexMatch "(" } ] ]
+]

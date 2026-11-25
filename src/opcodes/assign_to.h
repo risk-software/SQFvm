@@ -42,12 +42,19 @@ namespace sqf::opcodes
                 vm.__logmsg(logmessage::runtime::AssigningNilValue(diag_info(), m_variable_name));
             }
             if (m_variable_name.empty()) { return; }
+            // Variables holding a final value (compileFinal) cannot be overwritten.
+            auto is_final_value = [](const sqf::runtime::value& existing) { return !existing.empty() && existing.data<sqf::runtime::data>()->is_final(); };
             if (m_variable_name[0] == '_')
             {
                 for (auto it = context.frames_rbegin(); it != context.frames_rend(); ++it)
                 {
                     if (it->contains(m_variable_name))
                     {
+                        if (is_final_value((*it)[m_variable_name]))
+                        {
+                            vm.__logmsg(logmessage::runtime::WarningMessage(diag_info(), "assignment", "variable " + m_variable_name + " holds a final value and cannot be overwritten"));
+                            return;
+                        }
                         (*it)[m_variable_name] = *value;
                         return;
                     }
@@ -61,7 +68,13 @@ namespace sqf::opcodes
             }
             else
             {
-                context.current_frame().globals_value_scope()->at(m_variable_name) = *value;
+                auto globals = context.current_frame().globals_value_scope();
+                if (globals->contains(m_variable_name) && is_final_value(globals->at(m_variable_name)))
+                {
+                    vm.__logmsg(logmessage::runtime::WarningMessage(diag_info(), "assignment", "variable " + m_variable_name + " holds a final value and cannot be overwritten"));
+                    return;
+                }
+                globals->at(m_variable_name) = *value;
             }
         }
         virtual std::string to_string() const override { return std::string("ASSIGNTO ") + m_variable_name; }

@@ -28,6 +28,25 @@ set(RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/output)
 
 include_directories("${PROJECT_SOURCE_DIR}/include/tclap-1.2.2/include")
 
+# Boost.Regex (Boost Software License 1.0), header-only and without the rest of Boost. Arma 3 uses
+# Boost regular expressions, so regexMatch, regexFind and regexReplace use the same engine.
+include(FetchContent)
+if (POLICY CMP0169)
+    cmake_policy(SET CMP0169 OLD)
+endif()
+FetchContent_Declare(
+    boost_regex
+    GIT_REPOSITORY https://github.com/boostorg/regex.git
+    GIT_TAG boost-1.86.0
+    GIT_SHALLOW TRUE
+)
+FetchContent_GetProperties(boost_regex)
+if (NOT boost_regex_POPULATED)
+    FetchContent_Populate(boost_regex)
+endif()
+include_directories(SYSTEM "${boost_regex_SOURCE_DIR}/include")
+add_definitions(-DBOOST_REGEX_STANDALONE)
+
 option(SQFVM_ENABLE_SQC_SUPPORT "ENABLE SQC SUPPORT IN BUILD" OFF)
 option(SQFVM_ENABLE_FULL_DIAGNOSE "ENABLE FULL DIAGNOSTICS" OFF)
 option(SQFVM_ENABLE_ARMA2_LOCALKEYWORD "ENABLE ARMA2 LOCALKEYWORD" OFF)

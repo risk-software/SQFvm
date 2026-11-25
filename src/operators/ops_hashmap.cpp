@@ -22,6 +22,21 @@ using namespace sqf::types;
 
 namespace
 {
+    /// Final HashMaps cannot change; sealed HashMap objects cannot get new keys.
+    bool can_write(runtime& runtime, const std::shared_ptr<d_hashmap>& map, const value& key)
+    {
+        if (map->is_final())
+        {
+            runtime.__logmsg(err::ErrorMessage(runtime.context_active().current_frame().diag_info_from_position(), "HashMap", "the HashMap is final and cannot be changed"));
+            return false;
+        }
+        if (map->is_sealed() && map->map().find(key) == map->map().end())
+        {
+            runtime.__logmsg(err::ErrorMessage(runtime.context_active().current_frame().diag_info_from_position(), "HashMap", "the HashMap object is sealed; new keys cannot be added"));
+            return false;
+        }
+        return true;
+    }
     value createhashmap_(runtime& runtime)
     {
         return std::make_shared<d_hashmap>();
@@ -77,6 +92,10 @@ namespace
             return {};
         }
         auto& key = arr->at(0);
+        if (!can_write(runtime, data, key))
+        {
+            return {};
+        }
         // insertOnly (2.08): only set the value when the key is new.
         bool insert_only = arr->size() == 3 && arr->at(2).data_try<d_boolean, bool>(false);
         bool exists = data->map().find(key) != data->map().end();
@@ -104,6 +123,10 @@ namespace
     value deleteat_hashmap_any(runtime& runtime, value::cref left, value::cref right)
     {
         auto data = left.data<d_hashmap>();
+        if (!can_write(runtime, data, right))
+        {
+            return {};
+        }
         auto res = data->map().find(right);
         if (res != data->map().end())
         {
@@ -136,11 +159,6 @@ namespace
         }
         return std::make_shared<d_array>(keys);
     }
-    value plus_hashmap(runtime& runtime, value::cref right)
-    {
-        std::unordered_map<sqf::runtime::value, sqf::runtime::value> hashmap = right.data<d_hashmap>()->map();
-        return std::make_shared<d_hashmap>(hashmap);
-    }
 
     /// getOrDefault [key, default, setDefault] (setDefault since 2.04).
     value getordefault_hashmap_array(runtime& runtime, value::cref left, value::cref right)
@@ -158,7 +176,7 @@ namespace
             return found->second;
         }
         auto fallback = arr->size() >= 2 ? arr->at(1) : value{};
-        if (arr->size() == 3 && arr->at(2).data_try<d_boolean, bool>(false))
+        if (arr->size() == 3 && arr->at(2).data_try<d_boolean, bool>(false) && can_write(runtime, data, arr->at(0)))
         {
             data->map()[arr->at(0)] = fallback;
         }
@@ -180,7 +198,7 @@ namespace
             {
                 auto res = runtime.context_active().pop_value();
                 auto computed = res.has_value() ? *res : value{};
-                if (m_store)
+                if (m_store && can_write(runtime, m_map, m_key))
                 {
                     m_map->map()[m_key] = computed;
                 }
@@ -207,10 +225,14 @@ namespace
         return {};
     }
 
-    void merge_into(std::shared_ptr<d_hashmap> target, std::shared_ptr<d_hashmap> source, bool overwrite)
+    void merge_into(runtime& runtime, std::shared_ptr<d_hashmap> target, std::shared_ptr<d_hashmap> source, bool overwrite)
     {
         for (auto& pair : source->map())
         {
+            if (!can_write(runtime, target, pair.first))
+            {
+                return;
+            }
             if (overwrite)
             {
                 target->map()[pair.first] = pair.second;
@@ -223,7 +245,7 @@ namespace
     }
     value merge_hashmap_hashmap(runtime& runtime, value::cref left, value::cref right)
     {
-        merge_into(left.data<d_hashmap>(), right.data<d_hashmap>(), false);
+        merge_into(runtime, left.data<d_hashmap>(), right.data<d_hashmap>(), false);
         return {};
     }
     value merge_hashmap_array(runtime& runtime, value::cref left, value::cref right)
@@ -235,7 +257,7 @@ namespace
             return {};
         }
         bool overwrite = arr->size() == 2 && arr->at(1).data_try<d_boolean, bool>(false);
-        merge_into(left.data<d_hashmap>(), arr->at(0).data<d_hashmap>(), overwrite);
+        merge_into(runtime, left.data<d_hashmap>(), arr->at(0).data<d_hashmap>(), overwrite);
         return {};
     }
 
@@ -292,13 +314,21 @@ namespace
                 runtime.__logmsg(err::ErrorMessage(runtime.context_active().current_frame().diag_info_from_position(), "HashMap", "expected [key, value] pairs"));
                 return;
             }
+            if (!can_write(runtime, map, pair->at(0)))
+            {
+                return;
+            }
             map->map()[pair->at(0)] = pair->at(1);
         }
     }
-    void insert_split(std::shared_ptr<d_hashmap> map, std::shared_ptr<d_array> keys, std::shared_ptr<d_array> values)
+    void insert_split(runtime& runtime, std::shared_ptr<d_hashmap> map, std::shared_ptr<d_array> keys, std::shared_ptr<d_array> values)
     {
         for (size_t i = 0; i < keys->size(); i++)
         {
+            if (!can_write(runtime, map, keys->at(i)))
+            {
+                return;
+            }
             map->map()[keys->at(i)] = i < values->size() ? values->at(i) : value{};
         }
     }
@@ -325,7 +355,7 @@ namespace
                 runtime.__logmsg(err::ErrorMessage(runtime.context_active().current_frame().diag_info_from_position(), "insert", "expected [[keys], [values]]"));
                 return {};
             }
-            insert_split(map, content->at(0).data<d_array>(), content->at(1).data<d_array>());
+            insert_split(runtime, map, content->at(0).data<d_array>(), content->at(1).data<d_array>());
             return {};
         }
         insert_pairs(runtime, map, arr);
@@ -336,7 +366,7 @@ namespace
     value createhashmapfromarray_array_array(runtime& runtime, value::cref left, value::cref right)
     {
         auto map = std::make_shared<d_hashmap>();
-        insert_split(map, left.data<d_array>(), right.data<d_array>());
+        insert_split(runtime, map, left.data<d_array>(), right.data<d_array>());
         return map;
     }
 }
@@ -352,7 +382,6 @@ void sqf::operators::ops_hashmap(::sqf::runtime::runtime& runtime)
     runtime.register_sqfop(binary(4, "in", t_any(), t_hashmap(), "Checks if a given key is inside a value.", in_any_hashmap));
     runtime.register_sqfop(unary("count", t_hashmap(), "Returns the number of elements inside a hashmap.", count_hashmap));
     runtime.register_sqfop(unary("keys", t_hashmap(), "Returns the keys of a hashmap.", keys_hashmap));
-    runtime.register_sqfop(unary("+", t_hashmap(), "Returns a copy of the hashmap.", plus_hashmap));
     runtime.register_sqfop(binary(4, "getOrDefault", t_hashmap(), t_array(), "Returns the value of a key, or the default when the key is missing. With setDefault, the default is also stored.", getordefault_hashmap_array));
     runtime.register_sqfop(binary(4, "getOrDefaultCall", t_hashmap(), t_array(), "Returns the value of a key, or runs the code when the key is missing and returns its result. With set, the result is also stored.", getordefaultcall_hashmap_array));
     runtime.register_sqfop(binary(4, "merge", t_hashmap(), t_hashmap(), "Adds the pairs of the right HashMap to the left one, keeping existing keys.", merge_hashmap_hashmap));

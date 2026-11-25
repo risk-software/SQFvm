@@ -24,6 +24,8 @@ namespace sqf
             using data_type = sqf::runtime::t_code;
         private:
             sqf::runtime::instruction_set m_value;
+            // Set by compileFinal: the code cannot be overwritten in a variable.
+            bool m_final = false;
 
         protected:
             bool do_equals(std::shared_ptr<data> other, bool invariant) const override
@@ -91,6 +93,8 @@ namespace sqf
             virtual std::size_t hash() const override { return std::hash<std::string>()(to_string_sqf()); }
 
             const sqf::runtime::instruction_set& value() const { return m_value; }
+            bool is_final() const override { return m_final; }
+            void make_final() { m_final = true; }
             void value(sqf::runtime::instruction_set flag) { m_value = flag; }
 
             operator const sqf::runtime::instruction_set&() const { return m_value; }

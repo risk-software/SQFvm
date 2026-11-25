@@ -62,6 +62,12 @@ namespace sqf::runtime
         virtual std::string to_string() const = 0;
 
         /// <summary>
+        /// True for values made final with compileFinal. A variable holding a final value cannot
+        /// be overwritten.
+        /// </summary>
+        virtual bool is_final() const { return false; }
+
+        /// <summary>
         /// Compares this value against the other value and returns
         /// true if they are equivalent.
         /// If invariant false, comparison should be case-sensitive.

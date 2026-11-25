@@ -23,8 +23,22 @@ namespace sqf
         {
         private:
             std::unordered_map<sqf::runtime::value, sqf::runtime::value> m_map;
+            // compileFinal: no changes at all. sealed (#flags): no new keys. no_copy (#flags): + fails.
+            bool m_final = false;
+            bool m_sealed = false;
+            bool m_no_copy = false;
+            // #clone methods of a HashMap object, from base to derived class.
+            std::vector<sqf::runtime::value> m_clone_methods;
         public:
             using data_type = sqf::runtime::t_hashmap;
+            bool is_final() const override { return m_final; }
+            void make_final() { m_final = true; }
+            bool is_sealed() const { return m_sealed; }
+            void sealed(bool flag) { m_sealed = flag; }
+            bool is_no_copy() const { return m_no_copy; }
+            void no_copy(bool flag) { m_no_copy = flag; }
+            const std::vector<sqf::runtime::value>& clone_methods() const { return m_clone_methods; }
+            void clone_methods(std::vector<sqf::runtime::value> methods) { m_clone_methods = std::move(methods); }
         protected:
             virtual bool do_equals(std::shared_ptr<data> other, bool invariant) const
             {

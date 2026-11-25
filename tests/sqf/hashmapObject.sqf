@@ -1,0 +1,18 @@
+[   ["assertEqual",     ["the constructor runs with _self and _this", { private _object = createHashMapObject [[["#create", { _self set ["value", _this] }]], 42]; _object get "value" } ], 42],
+    ["assertEqual",     ["methods run with _self", { private _object = createHashMapObject [[["count", 3], ["Twice", { (_self get "count") * 2 }]]]; _object call ["Twice"] } ], 6],
+    ["assertEqual",     ["methods receive arguments in _this", { private _object = createHashMapObject [[["Add", { params ["_a", "_b"]; _a + _b }]]]; _object call ["Add", [2, 3]] } ], 5],
+    ["assertEqual",     ["constructors run from base to derived", { private _log = []; private _base = [["#create", { _log pushBack "base" }]]; private _derived = [["#base", _base], ["#create", { _log pushBack "derived" }]]; createHashMapObject [_derived]; _log } ], ["base", "derived"]],
+    ["assertEqual",     ["derived methods override base methods", { private _base = [["Fur", { "None" }]]; private _pig = [["#base", _base], ["Fur", { "Bristles" }]]; (createHashMapObject [_pig]) call ["Fur"] } ], "Bristles"],
+    ["assertEqual",     ["#type lists every inherited type", { private _animal = [["#type", "IAnimal"]]; private _pig = [["#base", _animal], ["#type", "Pig"]]; private _types = (createHashMapObject [_pig]) get "#type"; ["IAnimal" in _types, "Pig" in _types] } ], [true, true]],
+    ["assertEqual",     ["a sealed object keeps its keys", { private _object = createHashMapObject [[["#flags", ["sealed"]], ["a", 1]]]; _object set ["a", 2]; _object get "a" } ], 2],
+    ["assertException", ["a sealed object rejects new keys", { private _object = createHashMapObject [[["#flags", ["sealed"]]]]; _object set ["b", 1] } ] ],
+    ["assertException", ["a noCopy object cannot be copied", { private _object = createHashMapObject [[["#flags", ["noCopy"]]]]; +_object } ] ],
+    ["assertEqual",     ["a copy runs #clone with the copy as _self", { private _object = createHashMapObject [[["#clone", { _self set ["copied", true] }]]]; private _copy = +_object; [_copy getOrDefault ["copied", false], _object getOrDefault ["copied", false]] } ], [true, false]],
+    ["assertEqual",     ["+ makes a deep copy", { private _map = createHashMapFromArray [["list", [1]]]; private _copy = +_map; (_copy get "list") pushBack 2; _map get "list" } ], [1]],
+    ["assertEqual",     ["compileFinal code is final", { isFinal compileFinal "1 + 1" } ], true],
+    ["assertEqual",     ["normal code is not final", { isFinal { 1 } } ], false],
+    ["assertEqual",     ["compileFinal code runs", { call compileFinal "1 + 1" } ], 2],
+    ["assertEqual",     ["a final variable keeps its value", { sqfvm_test_final = compileFinal "1"; sqfvm_test_final = { 2 }; call sqfvm_test_final } ], 1],
+    ["assertException", ["a final HashMap cannot be changed", { private _map = compileFinal createHashMapFromArray [["a", 1]]; _map set ["a", 2] } ] ],
+    ["assertEqual",     ["compileFinal on a HashMap makes it final", { isFinal compileFinal createHashMap } ], true]
+]
