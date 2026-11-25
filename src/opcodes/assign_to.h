@@ -51,6 +51,11 @@ namespace sqf::opcodes
                         (*it)[m_variable_name] = *value;
                         return;
                     }
+                    // Same boundary as variable lookup, so privateAll scopes cannot change parent locals.
+                    if (!it->bubble_variable())
+                    {
+                        break;
+                    }
                 }
                 context.current_frame()[m_variable_name] = *value;
             }
