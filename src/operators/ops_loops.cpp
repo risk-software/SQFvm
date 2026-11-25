@@ -233,6 +233,8 @@ namespace
                     if (!condition.has_value())
                     {
                         runtime.__logmsg(err::TypeMissmatch(frame.diag_info_from_position(), t_boolean(), res->type()));
+                        runtime.context_active().clear_values();
+                        runtime.context_active().push_value(value{});
                         return result::ok;
                     }
                     if (*condition)
@@ -245,7 +247,9 @@ namespace
                 // The timeout is only checked after the condition, as in the engine.
                 if (m_has_deadline && std::chrono::system_clock::now() >= m_deadline)
                 {
+                    // The result is nil, so that assigning it works as in the engine.
                     runtime.context_active().clear_values();
+                    runtime.context_active().push_value(value{});
                     return result::ok;
                 }
                 runtime.context_active().suspend(m_interval);
