@@ -1,4 +1,6 @@
 ## SQF-VM
+
+> This is a modified fork with support for Arma 3 2.x commands. See [FORK.md](FORK.md) for the changes.
 __SQF-VM is a fully working and open-source Virtual Machine for the scripting language of the ArmA Games.__
 
 [![GitHub issues](https://img.shields.io/github/issues/SQFvm/vm)](https://github.com/SQFvm/vm/issues)

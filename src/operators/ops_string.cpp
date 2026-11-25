@@ -7,6 +7,7 @@
 #include "../runtime/d_string.h"
 #include "../runtime/d_scalar.h"
 #include "../runtime/d_array.h"
+#include "../runtime/d_code.h"
 
 #include <algorithm>
 #include <sstream>
@@ -264,6 +265,71 @@ namespace
     {
         return "\r\n"s;
     }
+    /// toLowerANSI and toUpperANSI (1.96) convert ASCII letters only, which is what makes them fast.
+    value toloweransi_string(runtime& runtime, value::cref right)
+    {
+        auto r = right.data<d_string, std::string>();
+        std::transform(r.begin(), r.end(), r.begin(), [](char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c; });
+        return r;
+    }
+    value toupperansi_string(runtime& runtime, value::cref right)
+    {
+        auto r = right.data<d_string, std::string>();
+        std::transform(r.begin(), r.end(), r.begin(), [](char c) { return (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c; });
+        return r;
+    }
+
+    enum class trim_side { both, start, end };
+    std::string trim_chars(std::string text, const std::string& chars, trim_side side)
+    {
+        if (side != trim_side::end)
+        {
+            auto first = text.find_first_not_of(chars);
+            text.erase(0, first == std::string::npos ? text.size() : first);
+        }
+        if (side != trim_side::start)
+        {
+            auto last = text.find_last_not_of(chars);
+            text.erase(last == std::string::npos ? 0 : last + 1);
+        }
+        return text;
+    }
+    /// trim (2.02) removes spaces, tabs and line breaks from both ends.
+    value trim_string(runtime& runtime, value::cref right)
+    {
+        return trim_chars(right.data<d_string, std::string>(), " \t\r\n", trim_side::both);
+    }
+    /// string trim [chars, where]: where 0 trims both ends, 1 the start and 2 the end.
+    value trim_string_array(runtime& runtime, value::cref left, value::cref right)
+    {
+        auto params = right.data<d_array>();
+        if (params->size() != 2 || !params->at(0).is<t_string>() || !params->at(1).is<t_scalar>())
+        {
+            runtime.__logmsg(err::ErrorMessage(runtime.context_active().current_frame().diag_info_from_position(), "trim", "expected [chars, where]"));
+            return left;
+        }
+        auto where = static_cast<int>(params->at(1).data<d_scalar, float>());
+        auto side = where == 1 ? trim_side::start : where == 2 ? trim_side::end : trim_side::both;
+        return trim_chars(left.data<d_string, std::string>(), params->at(0).data<d_string, std::string>(), side);
+    }
+
+    /// forceUnicode (2.02) changes how the next string command counts characters. SQF-VM works on
+    /// bytes throughout, so it is accepted and has no effect.
+    value forceunicode_scalar(runtime& runtime, value::cref right)
+    {
+        return {};
+    }
+
+    /// toString code (2.02) returns the code's text without the outer braces.
+    value tostring_code(runtime& runtime, value::cref right)
+    {
+        auto text = right.data<sqf::runtime::data>()->to_string_sqf();
+        if (text.size() >= 2 && text.front() == '{' && text.back() == '}')
+        {
+            text = text.substr(1, text.size() - 2);
+        }
+        return trim_chars(text, " \t\r\n", trim_side::both);
+    }
 }
 void sqf::operators::ops_string(sqf::runtime::runtime& runtime)
 {
@@ -284,4 +350,10 @@ void sqf::operators::ops_string(sqf::runtime::runtime& runtime)
         "Splits given string str into an array of tokens according to given delimiters. "
         "In addition, if empty string "" is used for delimiters, str is split by each character.", splitstring_string_string));
     runtime.register_sqfop(unary("parseNumber", t_string(), "Converts the supplied String into a Scalar.", parsenumber_string));
+    runtime.register_sqfop(unary("toLowerANSI", t_string(), "Converts ASCII letters of the string to lower case.", toloweransi_string));
+    runtime.register_sqfop(unary("toUpperANSI", t_string(), "Converts ASCII letters of the string to upper case.", toupperansi_string));
+    runtime.register_sqfop(unary("trim", t_string(), "Removes spaces, tabs and line breaks from both ends of the string.", trim_string));
+    runtime.register_sqfop(binary(4, "trim", t_string(), t_array(), "trim [chars, where]: removes the characters from both ends (0), the start (1) or the end (2).", trim_string_array));
+    runtime.register_sqfop(unary("forceUnicode", t_scalar(), "Accepted for compatibility; SQF-VM string commands always work on bytes.", forceunicode_scalar));
+    runtime.register_sqfop(unary("toString", t_code(), "Returns the code as a string, without the outer braces.", tostring_code));
 }

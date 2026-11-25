@@ -63,6 +63,8 @@ void cli::handle_files()
                         if (set.has_value())
                         {
                             auto context = m_runtime.context_create().lock();
+                            // Scripts given on the command line run as if spawned, as the --sqf and --input-sqf help says.
+                            context->can_suspend(true);
                             sqf::runtime::frame f(m_runtime.default_value_scope(), *set);
                             context->push_frame(f);
                             context->name(path.string());
@@ -129,6 +131,8 @@ void cli::handle_files()
                         if (set.has_value())
                         {
                             auto context = m_runtime.context_create().lock();
+                            // Scripts given on the command line run as if spawned, as the --sqf and --input-sqf help says.
+                            context->can_suspend(true);
                             sqf::runtime::frame f(m_runtime.default_value_scope(), *set);
                             context->push_frame(f);
                             context->name(path.string());

@@ -152,6 +152,7 @@ namespace
         else
         {
             frame f(runtime.default_value_scope(), left.data<d_code, instruction_set>(), std::make_shared<behavior_count_exit>(r));
+            f.is_loop(true);
             f["_x"] = r->at(0);
             runtime.context_active().push_frame(f);
         }
@@ -427,6 +428,8 @@ namespace
         }
 
         frame f(runtime.default_value_scope(), condition, std::make_shared<behavior_while_exit>(condition, code));
+
+        f.is_loop(true);
         runtime.context_active().push_frame(f);
         return { };
     }
@@ -514,6 +517,7 @@ namespace
             }
         }
         frame f(runtime.default_value_scope(), right.data<d_code, instruction_set>(), std::make_shared<behavior_for_exit>(fordata));
+        f.is_loop(true);
         f[fordata->variable()] = fordata->from();
         runtime.context_active().push_frame(f);
         return {};
@@ -553,6 +557,7 @@ namespace
         if (arr->size() > 0)
         {
             frame f(runtime.default_value_scope(), left.data<d_code, instruction_set>(), std::make_shared<behavior_foreach_exit>(arr));
+            f.is_loop(true);
             f["_forEachIndex"] = 0;
             f["_x"] = arr->at(0);
             runtime.context_active().push_frame(f);
@@ -711,6 +716,7 @@ namespace
         if (arr->size() > 0)
         {
             frame f(runtime.default_value_scope(), right.data<d_code, instruction_set>(), std::make_shared<behavior_select_exit>(arr));
+            f.is_loop(true);
             f["_x"] = arr->at(0);
             runtime.context_active().push_frame(f);
             return {};
@@ -919,6 +925,7 @@ namespace
         if (r->size() > 0)
         {
             frame f(runtime.default_value_scope(), right.data<d_code, instruction_set>(), std::make_shared<behavior_findif_exit>(r));
+            f.is_loop(true);
             f["_x"] = r->at(0);
             runtime.context_active().push_frame(f);
             return {};
@@ -977,10 +984,12 @@ namespace
         {
         private:
             size_t m_count;
+            bool m_could_suspend;
         public:
-            behavior_isnil_exit() : m_count(0) {}
+            behavior_isnil_exit(bool could_suspend) : m_count(0), m_could_suspend(could_suspend) {}
             virtual result enact(sqf::runtime::runtime& runtime, sqf::runtime::frame& frame) override
             {
+                runtime.context_active().can_suspend(m_could_suspend);
                 m_count++;
                 auto res = runtime.context_active().pop_value();
                 if (res.has_value())
@@ -996,7 +1005,10 @@ namespace
             };
         };
 
-        frame f(runtime.default_value_scope(), right.data<d_code, instruction_set>(), std::make_shared<behavior_isnil_exit>());
+        // As in the engine, the code of isNil runs unscheduled; the exit behavior restores the previous state.
+        auto could_suspend = runtime.context_active().can_suspend();
+        frame f(runtime.default_value_scope(), right.data<d_code, instruction_set>(), std::make_shared<behavior_isnil_exit>(could_suspend));
+        runtime.context_active().can_suspend(false);
         runtime.context_active().push_frame(f);
         return {};
     }
@@ -1151,6 +1163,7 @@ namespace
         if (arr->size() > 0)
         {
             frame f(runtime.default_value_scope(), right.data<d_code, instruction_set>(), std::make_shared<behavior_apply_exit>(arr));
+            f.is_loop(true);
             f["_x"] = arr->at(0);
             runtime.context_active().push_frame(f);
             return {};
@@ -1223,6 +1236,11 @@ namespace
         }
 
         auto index = params[0].data<d_scalar, int>();
+        // Negative indexes count from the end of the array (2.12).
+        if (index < 0)
+        {
+            index += static_cast<int>(arr->size());
+        }
         if (index < 0)
         {
             runtime.__logmsg(err::NegativeIndex(runtime.context_active().current_frame().diag_info_from_position()));

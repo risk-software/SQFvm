@@ -90,6 +90,9 @@ namespace sqf::runtime
         bool m_bubble_variable;
         bool m_started;
         bool m_die;
+        // Set by loop commands (for, forEach, while, count, select, apply, findIf, ...) so that
+        // break, breakWith, continue and continueWith can find the innermost loop.
+        bool m_is_loop;
         size_t m_value_stack_pos;
 
     private:
@@ -114,7 +117,8 @@ namespace sqf::runtime
             m_globals_value_scope(globals_scope),
             m_bubble_variable(true),
             m_started(false),
-            m_die(false)
+            m_die(false),
+            m_is_loop(false)
         {}
 
 #ifdef DF__SQF_RUNTIME__ASSEMBLY_DEBUG_ON_EXECUTE
@@ -235,6 +239,9 @@ namespace sqf::runtime
             success = it != m_instruction_set.end();
             return it;
         }
+
+        bool is_loop() const { return m_is_loop; }
+        void is_loop(bool flag) { m_is_loop = flag; }
 
         bool bubble_variable() const { return m_bubble_variable; }
         void bubble_variable(bool flag) { m_bubble_variable = flag; }
