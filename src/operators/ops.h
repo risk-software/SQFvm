@@ -20,6 +20,7 @@
 #include "ops_json.h"
 #include "ops_loops.h"
 #include "ops_scope.h"
+#include "ops_simulated.h"
 
 namespace sqf
 {
@@ -53,6 +54,9 @@ namespace sqf
             sqf::operators::ops_json(runtime);
             sqf::operators::ops_loops(runtime);
             sqf::operators::ops_scope(runtime);
+            // Must stay last: only fills syntaxes that have no real implementation.
+            sqf::operators::ops_simulated_support(runtime);
+            sqf::operators::ops_simulated(runtime);
         }
     }
 }
