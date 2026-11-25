@@ -13,6 +13,22 @@
 #include "d_object.h"
 
 namespace err = logmessage::runtime;
+
+// Defaults of a marker made with createMarker: an icon with no type, default colour, solid brush,
+// size 1 by 1, fully opaque and facing north.
+sqf::operators::markers_storage::marker::marker() :
+    mtext(),
+    mtype(),
+    mcolor("Default"),
+    mbrush("Solid"),
+    msize{ 1, 1 },
+    mpos{ 0, 0, 0 },
+    malpha(1),
+    mdirection(0),
+    mshape(shape::Icon)
+{
+}
+
 using namespace sqf::runtime;
 using namespace sqf::types;
 
@@ -143,9 +159,16 @@ namespace
         auto arr = right.data<d_array>();
         std::array<float, 3> pos {0, 0, 0};
         std::string name;
-        if (arr->check_type(runtime, std::array<type, 2> { t_string(), t_object()}))
+        // createMarker [name, positionOrObject, channel, creator]; channel and creator (2.02) do not
+        // matter on a single machine.
+        if (arr->size() < 2 || arr->size() > 4 || !arr->at(0).is<t_string>())
         {
-            name = arr->at(0).data<d_string, std::string>();
+            runtime.__logmsg(err::ErrorMessage(runtime.context_active().current_frame().diag_info_from_position(), "createMarker", "expected [name, position, channel, creator]"));
+            return {};
+        }
+        name = arr->at(0).data<d_string, std::string>();
+        if (arr->at(1).is<t_object>())
+        {
             auto objdata = arr->at(1).data<d_object>();
             if (objdata->is_null())
             {
@@ -153,27 +176,26 @@ namespace
                 runtime.__logmsg(err::ReturningNil(runtime.context_active().current_frame().diag_info_from_position()));
                 return {};
             }
-            auto obj = objdata->value();
-            auto tmp = obj->position();
-            pos = std::array<float, 3> { static_cast<float>(tmp.x), static_cast<float>(tmp.y), static_cast<float>(tmp.z)};
+            auto tmp = objdata->value()->position();
+            pos = std::array<float, 3> { static_cast<float>(tmp.x), static_cast<float>(tmp.y), static_cast<float>(tmp.z) };
         }
-        else if (arr->check_type(runtime, std::array<type, 2> { t_string(), t_array() }))
+        else if (arr->at(1).is<t_array>())
         {
-            name = arr->at(0).data<d_string, std::string>();
             auto tmpArr = arr->at(1).data<d_array>();
+            if (!tmpArr->check_type(runtime, t_scalar(), 2, 3))
+            {
+                return {};
+            }
             pos = std::array<float, 3>
             {
                 tmpArr->at(0).data<d_scalar, float>(),
                 tmpArr->at(1).data<d_scalar, float>(),
                 tmpArr->size() > 2 ? tmpArr->at(2).data<d_scalar, float>() : 0
             };
-            if (!arr->check_type(runtime, t_scalar(), 2, 3))
-            {
-                return {};
-            }
         }
         else
         {
+            runtime.__logmsg(err::ErrorMessage(runtime.context_active().current_frame().diag_info_from_position(), "createMarker", "the position must be an array or an object"));
             return {};
         }
         if (runtime.storage<sqf::operators::markers_storage>().exists(name))
@@ -182,7 +204,9 @@ namespace
             runtime.__logmsg(err::ReturningEmptyString(runtime.context_active().current_frame().diag_info_from_position()));
             return "";
         }
-        auto& marker = runtime.storage<sqf::operators::markers_storage>().at(name);
+        auto& storage = runtime.storage<sqf::operators::markers_storage>();
+        storage.set(name, sqf::operators::markers_storage::marker());
+        auto& marker = storage.at(name);
         marker.set_pos(pos);
         return name;
     }

@@ -400,6 +400,11 @@ sqf::runtime::runtime::result sqf::runtime::runtime::execute(sqf::runtime::runti
                     case sqf::runtime::runtime::result::ok: /* empty */ break;
                     }
                 }
+                // One pass over all scripts counts as one simulated frame.
+                for (auto& callback : m_frame_callbacks)
+                {
+                    callback(*this);
+                }
             }
         start_loop_exit:
             switch (res)

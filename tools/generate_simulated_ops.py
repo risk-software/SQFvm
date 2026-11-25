@@ -193,14 +193,18 @@ def render(syntaxes, data_version):
         key_name = cpp_string(name.lower())
         shown = cpp_string(name)
         result = f"return simulated_result(runtime, {shown}, simulated_return::{ret});"
+        # A real operator covers the syntax when it matches it exactly or takes any type on a side.
         if kind == "nular":
             lines.append(f"    if (!runtime.sqfop_exists(sqfop_nular::key{{ {key_name} }}))")
             lines.append(f"        runtime.register_sqfop(nular({shown}, description, [](::sqf::runtime::runtime& runtime) -> value {{ {result} }}));")
         elif kind == "unary":
-            lines.append(f"    if (!runtime.sqfop_exists(sqfop_unary::key{{ {key_name}, {right}() }}))")
+            lines.append(f"    if (!runtime.sqfop_exists(sqfop_unary::key{{ {key_name}, {right}() }}) && !runtime.sqfop_exists(sqfop_unary::key{{ {key_name}, t_any() }}))")
             lines.append(f"        runtime.register_sqfop(unary({shown}, {right}(), description, [](::sqf::runtime::runtime& runtime, value::cref) -> value {{ {result} }}));")
         else:
-            lines.append(f"    if (!runtime.sqfop_exists(sqfop_binary::key{{ {key_name}, {left}(), {right}() }}))")
+            lines.append(f"    if (!runtime.sqfop_exists(sqfop_binary::key{{ {key_name}, {left}(), {right}() }})"
+                         f" && !runtime.sqfop_exists(sqfop_binary::key{{ {key_name}, t_any(), {right}() }})"
+                         f" && !runtime.sqfop_exists(sqfop_binary::key{{ {key_name}, {left}(), t_any() }})"
+                         f" && !runtime.sqfop_exists(sqfop_binary::key{{ {key_name}, t_any(), t_any() }}))")
             lines.append(f"        runtime.register_sqfop(binary(4, {shown}, {left}(), {right}(), description, [](::sqf::runtime::runtime& runtime, value::cref, value::cref) -> value {{ {result} }}));")
     lines.append("}")
     return "\n".join(lines) + "\n"

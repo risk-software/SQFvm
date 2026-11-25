@@ -1,5 +1,6 @@
 #pragma once
 #include "logging.h"
+#include <functional>
 #include "diagnostics/breakpoint.h"
 #include "context.h"
 #include "confighost.h"
@@ -286,6 +287,7 @@ namespace sqf::runtime
 
             private:
                 std::vector<std::shared_ptr<sqf::runtime::context>> m_contexts;
+                std::vector<std::function<void(runtime&)>> m_frame_callbacks;
                 std::shared_ptr<sqf::runtime::context> m_context_active;
 
             public:
@@ -298,6 +300,8 @@ namespace sqf::runtime
                 };
                 std::shared_ptr<sqf::runtime::context> context_active_as_shared() const { return m_context_active; };
                 std::weak_ptr<context> context_create() { auto ptr = std::make_shared<context>(); m_contexts.push_back(ptr); return ptr; }
+                /// Runs after each pass over all scripts, which SQF-VM treats as one frame (EachFrame events).
+                void add_frame_callback(std::function<void(runtime&)> callback) { m_frame_callbacks.push_back(std::move(callback)); }
                 /// Marks a script as done with its result and starts its continueWith callbacks.
                 void complete_script(const std::shared_ptr<script_completion>& completion, sqf::runtime::value result);
                 context_iterator context_begin() { return m_contexts.begin(); }

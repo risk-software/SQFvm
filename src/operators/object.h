@@ -11,6 +11,7 @@
 #include <array>
 #include <vector>
 #include <algorithm>
+#include <unordered_map>
 
 namespace sqf
 {
@@ -87,7 +88,36 @@ namespace sqf
 
                 void erase(std::shared_ptr<d_object> obj);
             };
+            /// State that SQF-VM keeps for scripted changes, beyond the fields above.
+            struct world_state
+            {
+                // Orientation as direction and up vectors (setDir, setVectorDirAndUp, ...).
+                ::sqf::runtime::vec3 vector_dir{ 0, 1, 0 };
+                ::sqf::runtime::vec3 vector_up{ 0, 0, 1 };
+                // Values stored by setters that have a matching getter (setFatigue / getFatigue, ...),
+                // keyed by the property name.
+                std::unordered_map<std::string, sqf::runtime::value> properties;
+                // Object event handlers by lower-case event name, in the order they were added.
+                struct event_handler { int id; sqf::runtime::value code; };
+                std::unordered_map<std::string, std::vector<event_handler>> event_handlers;
+                std::unordered_map<std::string, int> next_event_handler_id;
+                // The unit loadout in getUnitLoadout format; empty until a loadout command is used.
+                sqf::runtime::value loadout;
+                // Crew of a vehicle: every occupied seat with its role ("driver", "gunner",
+                // "commander", "turret" or "cargo"), cargo index and turret path.
+                struct crew_seat
+                {
+                    std::weak_ptr<object> unit;
+                    std::string role;
+                    int cargo_index;
+                    std::vector<int> turret_path;
+                };
+                std::vector<crew_seat> crew;
+                // For a unit: the vehicle it sits in.
+                std::weak_ptr<object> vehicle;
+            };
         private:
+            world_state m_world;
             size_t m_netid;
             sqf::runtime::config m_config;
             bool m_is_vehicle;
@@ -109,6 +139,7 @@ namespace sqf
             object(sqf::runtime::config config, bool is_vehicle);
             object(const object& obj) = delete;
         public:
+            world_state& world() { return m_world; }
             sqf::runtime::config config() const { return m_config; }
             size_t netid() const { return m_netid; }
             bool is_vehicle() const { return m_is_vehicle; }
@@ -146,6 +177,9 @@ namespace sqf
             void commander(std::shared_ptr<d_object> val);
 
             soldiers_ soldiers() { return m_soldiers; }
+            // soldiers() returns a copy, so changes to it are lost; this gives the actual list.
+            soldiers_& soldiers_ref() { return m_soldiers; }
+            void parent_object(std::shared_ptr<d_object> parent) { m_parent_object = parent; }
             const configuration_ configuration() const { return m_configuration; }
 
 

@@ -18,6 +18,8 @@
 
 #include "object.h"
 #include "d_object.h"
+#include "ops_world.h"
+#include "world_events.h"
 #include "group.h"
 #include "d_group.h"
 #include "d_side.h"
@@ -34,6 +36,20 @@ using namespace std::string_literals;
 
 namespace
 {
+    /// A random offset within the placement radius; none for a radius below one metre.
+    float random_offset(float radius)
+    {
+        auto span = static_cast<int>(radius * 2);
+        return span > 0 ? static_cast<float>((std::rand() % span) - radius) : 0.0f;
+    }
+
+    /// EntityCreated runs in its own script, so the created object stays the command's return value.
+    value announce_created(runtime& runtime, std::shared_ptr<object> created)
+    {
+        auto handle = value(std::make_shared<d_object>(created));
+        sqf::operators::fire_mission_event(runtime, "EntityCreated", { handle }, true);
+        return handle;
+    }
     value objnull_(runtime& runtime)
     {
         return value(std::make_shared<d_object>());
@@ -55,7 +71,8 @@ namespace
     value createvehicle_array(runtime& runtime, value::cref right)
     {
         auto arr = right.data<d_array>();
-        if (!arr->check_type(runtime, std::array<sqf::runtime::type, 5>{ t_string(), t_array(), t_array(), t_string(), }))
+        // createVehicle [type, position, markers, placement, special]
+        if (!arr->check_type(runtime, std::array<sqf::runtime::type, 5>{ t_string(), t_array(), t_array(), t_scalar(), t_string() }, 4))
         {
             return {};
         }
@@ -91,11 +108,11 @@ namespace
         }
         auto veh = object::create(runtime, conf, true);
         veh->position({
-            position->at(0).data<d_scalar, float>() + ((std::rand() % static_cast<int>(radius * 2)) - radius),
-            position->at(1).data<d_scalar, float>() + ((std::rand() % static_cast<int>(radius * 2)) - radius),
+            position->at(0).data<d_scalar, float>() + random_offset(radius),
+            position->at(1).data<d_scalar, float>() + random_offset(radius),
             position->at(2).data<d_scalar, float>()
             });
-        return std::make_shared<d_object>(veh);
+        return announce_created(runtime, veh);
     }
     value createvehicle_string_array(runtime& runtime, value::cref left, value::cref right)
     {
@@ -138,7 +155,7 @@ namespace
             position->at(1).data<d_scalar, float>(),
             position->at(2).data<d_scalar, float>()
             });
-        return std::make_shared<d_object>(veh);
+        return announce_created(runtime, veh);
     }
 
     value deletevehicle_array(runtime& runtime, value::cref right)
@@ -149,7 +166,10 @@ namespace
             runtime.__logmsg(err::ExpectedNonNullValueWeak(runtime.context_active().current_frame().diag_info_from_position()));
             return {};
         }
-        veh->value()->destroy(runtime);
+        // Deleted and EntityDeleted handlers still see the object; it is removed after they ran.
+        auto target = veh->value();
+        sqf::operators::fire_object_and_mission_event(runtime, target, "Deleted", { right }, "EntityDeleted", { right },
+            [target, &runtime]() { target->destroy(runtime); });
         return {};
     }
     value position_object(runtime& runtime, value::cref right)
@@ -262,7 +282,8 @@ namespace
         auto grp = left.data<d_group>();
         auto arr = right.data<d_array>();
         
-        if (arr->check_type(runtime, std::array<sqf::runtime::type, 5> { t_string(), t_array(), t_array(), t_scalar(), t_string() }))
+        // group createUnit [type, position, markers, placement, special]
+        if (!arr->check_type(runtime, std::array<sqf::runtime::type, 5> { t_string(), t_array(), t_array(), t_scalar(), t_string() }, 4))
         {
             return {};
         }
@@ -298,11 +319,11 @@ namespace
         }
         auto veh = object::create(runtime, conf, false);
         veh->position({
-            position->at(0).data<d_scalar, float>() + ((std::rand() % static_cast<int>(radius * 2)) - radius),
-            position->at(1).data<d_scalar, float>() + ((std::rand() % static_cast<int>(radius * 2)) - radius),
+            position->at(0).data<d_scalar, float>() + random_offset(radius),
+            position->at(1).data<d_scalar, float>() + random_offset(radius),
             position->at(2).data<d_scalar, float>()
             });
-        return std::make_shared<d_object>(veh);
+        return announce_created(runtime, veh);
     }
     value createUnit_string_array(runtime& runtime, value::cref left, value::cref right)
     {
@@ -410,6 +431,7 @@ namespace
             position->at(1).data<d_scalar, float>(),
             position->at(2).data<d_scalar, float>()
             });
+        sqf::operators::fire_mission_event(runtime, "EntityCreated", { value(obj) }, true);
         return obj;
     }
     value distance_array_array(runtime& runtime, value::cref left, value::cref right)
@@ -773,7 +795,7 @@ namespace
             runtime.__logmsg(err::ExpectedNonNullValue(runtime.context_active().current_frame().diag_info_from_position()));
             return {};
         }
-        l->value()->damage(r);
+        sqf::operators::apply_scripted_damage(runtime, l->value(), r, value(std::make_shared<d_object>()), value(std::make_shared<d_object>()), true);
         return {};
     }
     value getdamage_object(runtime& runtime, value::cref right)
@@ -1132,13 +1154,6 @@ void sqf::operators::ops_object(sqf::runtime::runtime& runtime)
     runtime.register_sqfop(unary("getDammage", t_object(), "Return the damage value of an object.", getdamage_object));
     runtime.register_sqfop(unary("damage", t_object(), "Return the damage value of an object.", getdamage_object));
     runtime.register_sqfop(unary("alive", t_object(), "Check if given vehicle/person/building is alive (i.e. not dead or destroyed). alive objNull returns false.", alive_object));
-    runtime.register_sqfop(unary("crew", t_object(), "Returns the crew (both dead and alive) of the given vehicle.", crew_object));
-    runtime.register_sqfop(unary("vehicle", t_object(), "Vehicle in which given unit is mounted. If none, unit is returned.", vehicle_object));
-    runtime.register_sqfop(unary("objectParent", t_object(), "Returns parent of an object if the object is proxy, otherwise objNull.", objectparent_object));
-    runtime.register_sqfop(unary("driver", t_object(), "Returns the driver of a vehicle. If provided object is a unit, the unit is returned.", driver_object));
-    runtime.register_sqfop(unary("commander", t_object(), "Returns the primary observer. If provided object is a unit, the unit is returned.", commander_object));
-    runtime.register_sqfop(unary("gunner", t_object(), "Returns the gunner of a vehicle. If provided object is a unit, the unit is returned.", gunner_object));
-    runtime.register_sqfop(binary(4, "in", t_object(), t_object(), "Checks whether unit is in vehicle.", in_object_object));
     runtime.register_sqfop(unary("vehicleVarName", t_object(), "Returns the name of the variable which contains a primary editor reference to this object." "\n"
         "This is the variable given in the Insert Unit dialog / name field, in the editor. It can be changed using setVehicleVarName.", vehiclevarname_object));
     runtime.register_sqfop(binary(4, "setVehicleVarName", t_object(), t_string(), "Sets string representation of an object to a custom string. For example it is possible to return \"MyFerrari\" instead of default \"ce06b00# 164274: offroad_01_unarmed_f.p3d\" when querying object as string", setvehiclevarname_object_string));
