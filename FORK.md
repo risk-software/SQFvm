@@ -87,10 +87,40 @@ Later the same month:
   - `str objNull` and `str grpNull` match the engine.
 - **CBA_A3 test:** it no longer patches out commands that now exist. 349 of 355 tests pass.
 
+World model (also November 2026):
+
+- **Objects keep scripted state:**
+  - Every position form, on a flat world at height 0.
+  - Orientation and model-space conversion.
+  - Values stored by setters for their getters (fatigue, fuel, captive, allowDamage, hideObject,
+    simulation, AI features, unit traits, hit point damage, textures, lifeState and more).
+  - A crew model with seats from the vehicle config.
+- **Event handlers:** object and mission handlers run unscheduled.
+  - `Killed`, `MPKilled` and `EntityKilled` from `setDamage`.
+  - `Deleted` and `EntityDeleted` from `deleteVehicle`.
+  - `GetIn`, `GetInMan`, `GetOut` and `GetOutMan` from crew changes.
+  - `EntityCreated` from object creation, and `EachFrame` once per scheduler pass.
+- **Inventory:**
+  - Weapons with attachments and loaded magazines.
+  - Uniform, vest and backpack contents, headgear, goggles and assigned items.
+  - `getUnitLoadout` and `setUnitLoadout` (arrays and config classes).
+  - Vehicle cargo.
+  - Item kinds come from the loaded config, or from Bohemia's class-name prefixes when the class is
+    not loaded.
+- **Queries:** `nearEntities`, `entities`, `inArea`, `inAreaArray` with areas and markers, and object
+  lists.
+- **Upstream fixes:**
+  - The `createVehicle` and `createUnit` array forms.
+  - A divide by zero for placement radius 0.
+  - `createMarker` never creating its marker.
+  - A crew model that could not seat units.
+
 Known differences from the engine:
 
-- Commands that need the game world (objects, units, AI, UI, sound, terrain) are simulated: they
-  accept their documented arguments and return defaults, but do not keep world state yet.
+- The world is flat at height 0 with no terrain objects, water or physics. AI, pathing, UI, sound,
+  cameras, damage from weapons and object load capacity are simulated: those commands accept their
+  documented arguments and return defaults.
+- `typeOf player` is empty unless the loaded config defines the player's class.
 - Seeded `random` and `hashValue` are deterministic but differ from the engine's undocumented values.
 - `#delete` and `#str` of HashMap objects are not run.
 - String commands work on bytes, not Unicode characters.

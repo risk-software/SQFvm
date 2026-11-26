@@ -22,6 +22,7 @@
 #include "ops_scope.h"
 #include "ops_regex.h"
 #include "ops_world.h"
+#include "ops_inventory.h"
 #include "world_events.h"
 #include "ops_nil.h"
 #include "ops_system_extra.h"
@@ -64,6 +65,7 @@ namespace sqf
             sqf::operators::ops_scope(runtime);
             sqf::operators::ops_regex(runtime);
             sqf::operators::ops_world(runtime);
+            sqf::operators::ops_inventory(runtime);
             sqf::operators::ops_world_events(runtime);
             sqf::operators::ops_nil(runtime);
             sqf::operators::ops_system_extra(runtime);

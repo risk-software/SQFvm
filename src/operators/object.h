@@ -23,6 +23,7 @@ namespace sqf
     {
         class d_group;
         class d_object;
+        struct unit_inventory;
         class object : public std::enable_shared_from_this<::sqf::types::object>, public ::sqf::runtime::value_scope
         {
         public:
@@ -101,8 +102,8 @@ namespace sqf
                 struct event_handler { int id; sqf::runtime::value code; };
                 std::unordered_map<std::string, std::vector<event_handler>> event_handlers;
                 std::unordered_map<std::string, int> next_event_handler_id;
-                // The unit loadout in getUnitLoadout format; empty until a loadout command is used.
-                sqf::runtime::value loadout;
+                // Weapons, containers and items of a unit, or the cargo of a vehicle (ops_inventory).
+                std::shared_ptr<unit_inventory> inventory;
                 // Crew of a vehicle: every occupied seat with its role ("driver", "gunner",
                 // "commander", "turret" or "cargo"), cargo index and turret path.
                 struct crew_seat
